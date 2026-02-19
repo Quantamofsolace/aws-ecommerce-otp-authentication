@@ -23,10 +23,35 @@ source venv/bin/activate
 ```
 pip install -r requirements.txt
 ```
-# Run the  python backend application
+# crete systemd service  for  backend python
 ```
-nohup python3 app.py > app.log 2>&1 &
+sudo vi /etc/systemd/system/microapp.service
+
 ```
+Paste the below script and change the project paths according to your cloning path
+```
+[Unit]
+Description=Microapp Flask Application
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/aws-ecommerce-otp-authentication/backend
+Environment="PATH=/root/aws-ecommerce-otp-authentication/backend/venv/bin"
+ExecStart=/root/aws-ecommerce-otp-authentication/backend/venv/bin/python app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+```
+### Start the sytemd
+```
+sudo systemctl daemon-reload
+sudo systemctl restart microapp
+sudo systemctl status microapp
+```
+
 ### Frontend Deployment
 
 - clone the repo
