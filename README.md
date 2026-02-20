@@ -110,7 +110,7 @@ server {
 
     # 🔥  API reverse proxy (WITH PATH FIX)
     location ^~ /api/ {
-        proxy_pass http://backend-loadbalncer-url/;
+        proxy_pass http://backend-loadbalncer-url;
         proxy_http_version 1.1;
 
         proxy_set_header Host $host;
