@@ -46,7 +46,10 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
-
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    # ALB calls this every 30 seconds to verify the app is running
+    return jsonify({'status': 'healthy'}), 200
 # ---------------- HEALTH CHECK ----------------
 @app.route("/api/health", methods=["GET"])
 def health():
@@ -165,3 +168,4 @@ def login_verify():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
