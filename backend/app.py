@@ -11,25 +11,31 @@ app = Flask(__name__)
 CORS(app)
 
 # ---------------- CONFIGURATION ----------------
+# Repo: https://github.com/CloudTechDevOps/aws-ecommerce-otp-authentication.git
+# Region: ap-south-1 (Mumbai) — Free Tier (No RDS Proxy)
+# Update "host" with your RDS endpoint from: AWS Console → RDS → Databases → Connectivity
+
 db_config = {
-    "host": "dev.c8h8simk8khk.us-east-1.rds.amazonaws.com",
-    "user": "admin",
-    "password": "Cloud123",
-    "database": "cloud"
+    "host": "ecommerce-db-primary",  # <-- Get from AWS Console → RDS → Databases → Connectivity
+    "user": "admin",                  # <-- Your RDS master username
+    "password": "Cloud123",  # <-- Your RDS master password
+    "database": "ecommerce-db-primary"               # <-- Matches DB name in test.sql
 }
 
-# GMAIL CONFIG - Use a Google App Password here!
+# GMAIL CONFIG — Use a Google App Password (NOT your Gmail login password)
+# Generate at: https://myaccount.google.com/apppasswords
 app.config.update(
     MAIL_SERVER='smtp.gmail.com',
     MAIL_PORT=587,
     MAIL_USE_TLS=True,
-    MAIL_USERNAME='vvardhan2211@gmail.com', 
-    MAIL_PASSWORD='czvk tjjz kiea qrbu' 
+    MAIL_USERNAME='vvardhan2211@gmail.com',  # <-- Your Gmail address
+    MAIL_PASSWORD='czvk tjjz kiea qrbu'      # <-- Your 16-char Google App Password
 )
 mail = Mail(app)
 
-# Temp storage for registrations waiting for OTP verification
+# Temp in-memory storage for registrations awaiting OTP verification
 pending_users = {}
+
 
 def get_db_connection():
     return pymysql.connect(
@@ -40,6 +46,13 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
+
+# ---------------- HEALTH CHECK ----------------
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "healthy", "region": "ap-south-1"}), 200
+
+
 # ---------------- SIGNUP LOGIC (2 STEPS) ----------------
 
 @app.route("/api/signup/request", methods=["POST"])
@@ -47,11 +60,9 @@ def signup_request():
     data = request.get_json()
     email = data.get("email")
     username = data.get("username")
-    
-    # Generate 6-digit OTP
+
     otp = str(random.randint(100000, 999999))
-    
-    # Store user data temporarily
+
     pending_users[email] = {
         "username": username,
         "password": generate_password_hash(data.get("password")),
@@ -60,12 +71,17 @@ def signup_request():
     }
 
     try:
-        msg = Message("Google Store - Verify Registration", sender=app.config['MAIL_USERNAME'], recipients=[email])
-        msg.body = f"Hello {username}, your registration  from veera sir naresh itOTP is {otp}. It expires in 10 minutes."
+        msg = Message(
+            "Google Store - Verify Registration",
+            sender=app.config['MAIL_USERNAME'],
+            recipients=[email]
+        )
+        msg.body = f"Hello {username}, your registration OTP is {otp}. It expires in 10 minutes."
         mail.send(msg)
         return jsonify({"message": "OTP sent to email!"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/signup/verify", methods=["POST"])
 def signup_verify():
@@ -87,6 +103,7 @@ def signup_verify():
             return jsonify({"error": "User already exists"}), 400
     return jsonify({"error": "Invalid or expired OTP"}), 401
 
+
 # ---------------- LOGIN LOGIC (2 STEPS) ----------------
 
 @app.route("/api/login/request", methods=["POST"])
@@ -103,19 +120,25 @@ def login_request():
     if user and check_password_hash(user["password"], password):
         otp = str(random.randint(100000, 999999))
         expiry = datetime.now() + timedelta(minutes=5)
-        
-        # Store OTP in DB for existing user
-        cursor.execute("UPDATE users SET otp_code = %s, otp_expiry = %s WHERE email = %s", 
-                       (otp, expiry, email))
+
+        cursor.execute(
+            "UPDATE users SET otp_code = %s, otp_expiry = %s WHERE email = %s",
+            (otp, expiry, email)
+        )
         conn.commit()
-        
-        msg = Message("Google Store - Login OTP", sender=app.config['MAIL_USERNAME'], recipients=[email])
-        msg.body = f"Your login OTP from veera sir naresh it is {otp}. It expires in 5 minutes."
+
+        msg = Message(
+            "Google Store - Login OTP",
+            sender=app.config['MAIL_USERNAME'],
+            recipients=[email]
+        )
+        msg.body = f"Your login OTP is {otp}. It expires in 5 minutes."
         mail.send(msg)
-        
+
         return jsonify({"message": "OTP sent to email"}), 200
-    
+
     return jsonify({"error": "Invalid credentials"}), 401
+
 
 @app.route("/api/login/verify", methods=["POST"])
 def login_verify():
@@ -125,7 +148,10 @@ def login_verify():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = %s AND otp_code = %s", (email, user_otp))
+    cursor.execute(
+        "SELECT * FROM users WHERE email = %s AND otp_code = %s",
+        (email, user_otp)
+    )
     user = cursor.fetchone()
 
     if user and datetime.now() < user["otp_expiry"]:
@@ -133,8 +159,9 @@ def login_verify():
             "message": "Login successful",
             "user": {"username": user["username"], "email": user["email"]}
         }), 200
-    
+
     return jsonify({"error": "Invalid or expired OTP"}), 401
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
